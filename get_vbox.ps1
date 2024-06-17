@@ -11,7 +11,9 @@ $HEADER = "        __  ___                 __   __          __   __   __  ___   
  \/  | |  \  |  \__/ /~~\ |___ |__) \__/ / \    |    \__/ |  \  |  /~~\ |__) |___ |___    
                                                                                           "
 Write-Host "`n$HEADER"
-Write-Host "VBox-PowerPortable v$VERSION - by $AUTHOR`n`n" -ForegroundColor Green
+Write-Host "VBox-PowerPortable v$VERSION - by $AUTHOR`n" -ForegroundColor Green
+Write-Host "   ~ Getter Script ~`n" -ForegroundColor Green
+
 
 # Constants
 $VBOX_WEB_URL = "https://www.virtualbox.org/wiki/Downloads"
@@ -187,7 +189,7 @@ try {
 
     # Success
     Write-Host "[i] Virtualbox is now located at $TARGET_FOLDER" -ForegroundColor Green
-
+    Write-Host "[i] Completed successfully." -ForegroundColor Green
 } catch {
     Write-Warning "[ERROR] Failed to get VirtualBox."
     Write-Warning $_.Exception.Message
