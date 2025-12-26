@@ -124,7 +124,7 @@ function Create-SC-Service {
     )
 
     # create the service
-    $result = Run-Command "sc" "create $ServiceName binPath=$ServicePath $ServiceArgs"
+    $result = Run-Command "sc" "create $ServiceName binPath=`"$ServicePath`" $ServiceArgs"
 
     if ($result.ExitCode -ne 0) {
         throw "failed to create service. Error: $($result.Error)"
@@ -207,7 +207,7 @@ function Register-Dll {
     )
 
     # register the dll
-    $result = Run-Command "regsvr32" "/s $DllPath"
+    $result = Run-Command "regsvr32" "/s `"$DllPath`""
 
     if ($VERBOSE) {
         Write-Host "$($result.Output)" -ForegroundColor Green
@@ -229,7 +229,7 @@ function Unregister-Dll {
     )
 
     # unregister the dll
-    $result = Run-Command "regsvr32" "/u /s $DllPath"
+    $result = Run-Command "regsvr32" "/u /s `"$DllPath`""
 
     if ($VERBOSE) {
         Write-Host "$($result.Output)" -ForegroundColor Green
@@ -255,7 +255,7 @@ function Install-Driver {
     )
 
     # install the driver
-    $result = Run-Command "$DevconPath" "install $DriverPath $HardwareId"
+    $result = Run-Command "$DevconPath" "install `"$DriverPath`" $HardwareId"
 
     if ($VERBOSE) {
         Write-Host "$($result.Output)" -ForegroundColor Green
@@ -305,7 +305,7 @@ function Install-Network-Config {
     )
 
     # .\Utils\x64\netcfg.exe -v -l "%cd%\x64\drivers\network\netlwf\VBoxNetLwf.inf" -c s -i "oracle_VBoxNetLwf"
-    $result = Run-Command "$netcfgPath" "-v -l $NetworkConfigPath -c s -i $ConfigID"
+    $result = Run-Command "$netcfgPath" "-v -l `"$NetworkConfigPath`" -c s -i $ConfigID"
 
     if ($VERBOSE) {
         Write-Host "$($result.Output)" -ForegroundColor Green
@@ -385,9 +385,9 @@ function Install-All-Services {
     # regsvr32.exe /s "%cd%\x64\x86\VBoxClient-x86.dll"
     Register-Dll "$VBoxFolder\x86\VBoxClient-x86.dll" -ErrorAction SilentlyContinue
     # .\x64\VBoxManage setproperty machinefolder "%cd%\Home\VMs"
-    Run-Command "$VBoxFolder\VBoxManage.exe" "setproperty machinefolder $PSScriptRoot\Home\VMs" -ErrorAction SilentlyContinue
+    Run-Command "$VBoxFolder\VBoxManage.exe" "setproperty machinefolder `"$PSScriptRoot\Home\VMs`"" -ErrorAction SilentlyContinue
     # ICACLS "%cd%\x64" /setowner "NT Service\TrustedInstaller" /T /L /Q
-    Run-Command "ICACLS" "$VBoxFolder /setowner `"`NT Service\TrustedInstaller`"` /T /L /Q" -ErrorAction SilentlyContinue
+    Run-Command "ICACLS" "`"$VBoxFolder`" /setowner `"NT Service\TrustedInstaller`" /T /L /Q" -ErrorAction SilentlyContinue
 }
 
 # Uninstaller Function
@@ -428,7 +428,7 @@ function Uninstall-All-Services {
     # sc delete "VBoxSup"
     Remove-SC-Service "VBoxSup" -ErrorAction SilentlyContinue
     # ICACLS "PATH" /setowner "Everyone" /T /L /Q
-    Run-Command "ICACLS" "$VBoxFolder /setowner 'Everyone' /T /L /Q" -ErrorAction SilentlyContinue
+    Run-Command "ICACLS" "`"$VBoxFolder`" /setowner `"Everyone`" /T /L /Q" -ErrorAction SilentlyContinue
 }
 
 
