@@ -16,10 +16,25 @@ Write-Host "   ~ Setup Script ~`n" -ForegroundColor Green
 
 # Elevate the script
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
-    Write-Host "[i] Elevating script to Administrator..." -ForegroundColor Yellow
-    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"" -Verb RunAs
-    exit
+    # Check if gsudo is available for same-window elevation
+    $gsudoPath = Get-Command "gsudo" -ErrorAction SilentlyContinue
+    if ($gsudoPath) {
+        Write-Host "[i] Elevating with gsudo..." -ForegroundColor Yellow
+        $argString = $args -join " "
+        gsudo powershell -NoProfile -ExecutionPolicy Bypass -File "$PSCommandPath" $argString
+        exit
+    } else {
+        Write-Host ""
+        Write-Host "[!] Administrator privileges required!" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "    Please run this script in one of these ways:" -ForegroundColor Yellow
+        Write-Host "    1. Right-click PowerShell -> 'Run as Administrator'" -ForegroundColor Cyan
+        Write-Host "    2. Install gsudo for same-window elevation: winget install gsudo" -ForegroundColor Cyan
+        Write-Host ""
+        exit 1
+    }
 }
+Write-Host "[OK] Running as Administrator" -ForegroundColor Green
 
 # Variables
 $VERBOSE = $false

@@ -47,15 +47,6 @@ function Log-Step {
     Write-Host "`n=== $Message ===" -ForegroundColor Magenta
 }
 
-# Elevate the script
-Log-Info "Checking for administrator privileges..."
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
-    Log-Warning "Not running as Administrator. Elevating..."
-    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    exit
-}
-Log-Success "Running with Administrator privileges"
-
 # Variables
 $VERBOSE = $false
 # check arguments
