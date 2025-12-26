@@ -111,7 +111,7 @@ function Get-Msi-From-Exe {
 
     # extract the MSI file
     $FUNCTION_TEMP_DIR = Make-Temp-Dir
-    Start-Process cmd -ArgumentList "/min /c set __COMPAT_LAYER=RUNASINVOKER && start $EXE_FILE --silent -extract -path $FUNCTION_TEMP_DIR" -Wait -NoNewWindow -PassThru | Out-Null
+    Start-Process cmd -ArgumentList "/min /c set __COMPAT_LAYER=RUNASINVOKER && start `"`" `"$EXE_FILE`" --silent -extract -path `"$FUNCTION_TEMP_DIR`"" -Wait -NoNewWindow -PassThru | Out-Null
     Move-Item $FUNCTION_TEMP_DIR\VirtualBox-*.msi -Destination "$TARGET_FOLDER\$TARGET_FILENAME" -Force -ErrorAction SilentlyContinue | Out-Null
     Remove-Item -Path $FUNCTION_TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
 }
@@ -140,7 +140,7 @@ function Extract-Msi {
 
     # Extract the MSI file
     $FUNCTION_TEMP_DIR = Make-Temp-Dir
-    Start-Process msiexec -ArgumentList "/a $MSI_FILE /qn TARGETDIR=$FUNCTION_TEMP_DIR" -Wait -NoNewWindow -PassThru | Out-Null
+    Start-Process msiexec -ArgumentList "/a `"$MSI_FILE`" /qn TARGETDIR=`"$FUNCTION_TEMP_DIR`"" -Wait -NoNewWindow -PassThru | Out-Null
     Move-Item $FUNCTION_TEMP_DIR\PFiles\Oracle\VirtualBox\* $TARGET_FOLDER -Force -ErrorAction SilentlyContinue | Out-Null
     Remove-Item -Path $FUNCTION_TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
     if ($VERBOSE) {
