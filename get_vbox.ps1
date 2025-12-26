@@ -259,14 +259,38 @@ function Get-Msi-From-Exe {
     $FUNCTION_TEMP_DIR = Make-Temp-Dir
     
     Log-Info "Running VirtualBox installer in extraction mode..."
-    Log-Verbose "Command: cmd /min /c set __COMPAT_LAYER=RUNASINVOKER && start `"`" `"$EXE_FILE`" --silent -extract -path `"$FUNCTION_TEMP_DIR`""
+    Log-Verbose "EXE Path: $EXE_FILE"
+    Log-Verbose "Extract Path: $FUNCTION_TEMP_DIR"
     
-    $extractProcess = Start-Process cmd -ArgumentList "/min /c set __COMPAT_LAYER=RUNASINVOKER && start `"`" `"$EXE_FILE`" --silent -extract -path `"$FUNCTION_TEMP_DIR`"" -Wait -NoNewWindow -PassThru
+    # Set RUNASINVOKER to prevent UAC prompt and run extraction
+    $env:__COMPAT_LAYER = "RUNASINVOKER"
+    
+    # Run the VirtualBox installer with extraction parameters
+    $extractArgs = @(
+        "--silent",
+        "--extract",
+        "-path",
+        "`"$FUNCTION_TEMP_DIR`""
+    )
+    Log-Verbose "Arguments: $($extractArgs -join ' ')"
+    
+    $extractProcess = Start-Process -FilePath $EXE_FILE -ArgumentList $extractArgs -Wait -PassThru -NoNewWindow
     
     Log-Verbose "Extraction process completed with exit code: $($extractProcess.ExitCode)"
     
-    # Wait a bit for files to be written
-    Start-Sleep -Seconds 2
+    # Wait for files to be written (extraction happens async sometimes)
+    Log-Verbose "Waiting for extraction to complete..."
+    $maxWait = 30
+    $waited = 0
+    while ($waited -lt $maxWait) {
+        $MsiFiles = Get-ChildItem -Path $FUNCTION_TEMP_DIR -Filter "VirtualBox-*.msi" -ErrorAction SilentlyContinue
+        if ($MsiFiles) {
+            Log-Verbose "MSI file appeared after $waited seconds"
+            break
+        }
+        Start-Sleep -Seconds 1
+        $waited++
+    }
     
     # Find extracted MSI
     Log-Verbose "Looking for extracted MSI files in: $FUNCTION_TEMP_DIR"
@@ -274,15 +298,35 @@ function Get-Msi-From-Exe {
     
     if ($MsiFiles) {
         foreach ($msi in $MsiFiles) {
-            Log-Verbose "  Found: $($msi.Name)"
+            Log-Verbose "  Found MSI: $($msi.Name) (Size: $([math]::Round($msi.Length / 1MB, 2)) MB)"
         }
         
-        Move-Item $FUNCTION_TEMP_DIR\VirtualBox-*.msi -Destination "$TARGET_FOLDER\$TARGET_FILENAME" -Force -ErrorAction SilentlyContinue | Out-Null
+        # Also look for CAB files - they are REQUIRED for MSI extraction
+        $CabFiles = Get-ChildItem -Path $FUNCTION_TEMP_DIR -Filter "*.cab" -ErrorAction SilentlyContinue
+        if ($CabFiles) {
+            foreach ($cab in $CabFiles) {
+                Log-Verbose "  Found CAB: $($cab.Name) (Size: $([math]::Round($cab.Length / 1MB, 2)) MB)"
+            }
+        }
+        
+        # Move MSI file
+        $MsiSource = $MsiFiles | Select-Object -First 1
+        Move-Item $MsiSource.FullName -Destination "$TARGET_FOLDER\$TARGET_FILENAME" -Force
         Log-Success "MSI extracted and moved: $TARGET_FOLDER\$TARGET_FILENAME"
+        
+        # Move CAB files alongside MSI (required for msiexec /a to work)
+        if ($CabFiles) {
+            foreach ($cab in $CabFiles) {
+                Log-Verbose "Moving CAB file: $($cab.Name)"
+                Move-Item $cab.FullName -Destination "$TARGET_FOLDER\$($cab.Name)" -Force
+            }
+            Log-Success "CAB files moved: $($CabFiles.Count) file(s)"
+        }
     } else {
-        Log-Warning "No MSI files found in extraction directory"
-        Log-Verbose "Directory contents:"
-        Get-ChildItem -Path $FUNCTION_TEMP_DIR -Recurse | ForEach-Object { Log-Verbose "  $($_.FullName)" }
+        Log-Warning "No MSI files found in extraction directory after waiting $maxWait seconds"
+        Log-Info "Directory contents:"
+        Get-ChildItem -Path $FUNCTION_TEMP_DIR -Recurse | ForEach-Object { Log-Info "  $($_.FullName)" }
+        throw "MSI extraction failed - no MSI file produced"
     }
     
     Log-Verbose "Cleaning up temporary extraction directory..."
@@ -316,18 +360,50 @@ function Extract-Msi {
     }
     Log-Verbose "Target folder exists: OK"
 
-    # Extract the MSI file
-    $FUNCTION_TEMP_DIR = Make-Temp-Dir
+    # Use a temp folder in the SCRIPT's directory to avoid cross-drive and permission issues
+    # msiexec /a has issues with paths on different drives or with special characters
+    $FUNCTION_TEMP_DIR = "$PSScriptRoot\.msi_extract_temp"
+    $msiLogFile = "$PSScriptRoot\.cache\msiexec.log"
+    
+    # Clean up any previous temp folder
+    if (Test-Path $FUNCTION_TEMP_DIR) {
+        Log-Verbose "Removing previous temp extraction folder..."
+        Remove-Item -Path $FUNCTION_TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    
+    # Create the temp folder
+    Log-Verbose "Creating extraction temp folder: $FUNCTION_TEMP_DIR"
+    New-Item -ItemType Directory -Path $FUNCTION_TEMP_DIR -Force | Out-Null
     
     Log-Info "Extracting MSI to temp folder..."
-    $msiCmd = "msiexec /a `"$MSI_FILE`" /qn TARGETDIR=`"$FUNCTION_TEMP_DIR`""
-    Log-Verbose "Running command: $msiCmd"
+    Log-Verbose "MSI File: $MSI_FILE"
+    Log-Verbose "Temp Dir: $FUNCTION_TEMP_DIR"
+    
+    # Build msiexec command - use /a for administrative install (extract)
+    # Include logging for debugging
+    $msiArgs = "/a `"$MSI_FILE`" /qn TARGETDIR=`"$FUNCTION_TEMP_DIR`" /l*v `"$msiLogFile`""
+    Log-Verbose "Running: msiexec $msiArgs"
     
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-    cmd /c $msiCmd
+    
+    # Use cmd /c to properly handle the msiexec command
+    $msiProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c msiexec $msiArgs" -Wait -PassThru -NoNewWindow
+    
     $stopwatch.Stop()
     
     Log-Verbose "MSI extraction completed in: $($stopwatch.Elapsed.ToString('mm\:ss'))"
+    Log-Verbose "msiexec exit code: $($msiProcess.ExitCode)"
+    
+    if ($msiProcess.ExitCode -ne 0) {
+        Log-Warning "msiexec returned non-zero exit code: $($msiProcess.ExitCode)"
+        Log-Info "Check log file for details: $msiLogFile"
+        
+        # Try to show last few lines of log if it exists
+        if (Test-Path $msiLogFile) {
+            Log-Verbose "Last 10 lines of msiexec log:"
+            Get-Content $msiLogFile -Tail 10 | ForEach-Object { Log-Verbose "  $_" }
+        }
+    }
     
     # Find VirtualBox.exe in the extracted files
     Log-Verbose "Searching for VirtualBox.exe in extracted files..."
